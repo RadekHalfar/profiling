@@ -1,0 +1,12 @@
+Package: profiling
+Type: Package
+Title: R Script Profiling Tool
+Version: 0.0.0.9000
+Authors@R: c(person(given = "Radek", family = "Halfar", role = c("aut", "cre"), email = "radek@example.com"))
+Description: A comprehensive R package for profiling and analyzing the performance of R scripts. This tool provides detailed metrics on execution time and memory usage for different steps of your R code, along with interactive HTML reports.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: pryr, tictoc, knitr, kableExtra, ggplot2, plotly, DT, gridExtra

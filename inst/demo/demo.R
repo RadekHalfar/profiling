@@ -1,8 +1,8 @@
 # Demo script for R Profiling Tool
 # This script demonstrates how to use the profiling functions
 
-# 1. Source the profiling script
-source("profiling.R")
+# 1. Load the profiling package
+library(profiling)
 
 # 2. Initialize profiling with script metadata
 .init_profiling(

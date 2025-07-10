@@ -30,6 +30,15 @@ profiling_data <- NULL
 #
 # @param ... Named arguments containing script metadata (e.g., script_name, workers, etc.)
 # @return Invisibly returns TRUE if successful
+#' Initialize profiling environment
+#'
+#' Creates and resets the global data structures used to collect step timing
+#' and memory metrics. Optionally stores metadata (e.g. script name, author)
+#' for inclusion in the generated HTML report.
+#'
+#' @param ... Named metadata fields (e.g. `script_name`, `description`).
+#' @return Invisibly returns `TRUE` when initialised.
+#' @export
 .init_profiling <- function(...) {
   # Ensure all required packages are installed and loaded
   .ensure_packages()
@@ -46,6 +55,22 @@ profiling_data <- NULL
            stringsAsFactors = FALSE
          ),
          envir = .GlobalEnv)
+  
+  # Remove any stale copy of profiling_data from the package namespace to
+  # avoid conflicts with locked bindings when the package is reloaded in the
+  # same R session.
+  if ("profiling" %in% loadedNamespaces()) {
+    ns <- asNamespace("profiling")
+    if (exists("profiling_data", envir = ns, inherits = FALSE)) {
+      # unlock if necessary then delete
+      if (bindingIsLocked("profiling_data", ns)) {
+        unlockBinding("profiling_data", ns)
+      }
+      # Cannot remove from locked namespace; instead replace with NULL
+      assign("profiling_data", NULL, envir = ns)
+      lockBinding("profiling_data", ns)
+    }
+  }
   
   # Store metadata
   metadata <- list(...)
@@ -68,7 +93,16 @@ profiling_data <- NULL
   invisible(TRUE)
 }
 
-# Start profiling a step
+#' Begin profiling a step
+#'
+#' Internally called by `profile_code()` but can be used manually to start
+#' timing an arbitrary code segment. Must be paired with
+#' `.end_profiling_step()` using the same `step_name`.
+#'
+#' @param step_name Unique label for the step.
+#' @return Invisibly returns `NULL`.
+#' @seealso `.end_profiling_step`, `profile_code`
+#' @export
 .start_profiling_step <- function(step_name) {
   if (!exists("profiling_data", envir = .GlobalEnv)) {
     .init_profiling()
@@ -88,7 +122,15 @@ profiling_data <- NULL
          envir = .GlobalEnv)
 }
 
-# End profiling a step
+#' Finish profiling a step
+#'
+#' Complements `.start_profiling_step()`. Records elapsed time and memory
+#' usage, appending a row to the `profiling_data` data frame.
+#'
+#' @param step_name Name used in the corresponding `.start_profiling_step()`.
+#' @return Data frame row with step metrics.
+#' @seealso `.start_profiling_step`, `profile_code`
+#' @export
 .end_profiling_step <- function(step_name) {
   # Get step info
   step_var <- paste0("step_", step_name)
@@ -123,7 +165,10 @@ profiling_data <- NULL
     stringsAsFactors = FALSE
   )
   
-  profiling_data <<- rbind(profiling_data, new_row)
+  # Update profiling_data stored in .GlobalEnv (avoid locked binding in package namespace)
+  assign("profiling_data", 
+         rbind(get("profiling_data", envir = .GlobalEnv), new_row), 
+         envir = .GlobalEnv)
   
   # Clean up
   rm(list = step_var, envir = .GlobalEnv)
@@ -209,9 +254,26 @@ profiling_data <- NULL
 # @param show_report Logical indicating whether to open the report in browser (default: FALSE)
 # @param save_report Logical indicating whether to save the report to a file (default: TRUE)
 # @return The HTML content as a character string (invisibly if saved to file)
+#' Generate interactive profiling report
+#'
+#' Creates a Bootstrap-styled HTML report summarising step timings and memory
+#' usage. Optionally writes it to `output_dir` and/or opens it in the default
+#' browser.
+#'
+#' @param output_dir Directory to save the report. Default: "profiling_reports".
+#' @param file_name Name of the output HTML file (without extension). If `NULL`
+#'   a timestamp is used.
+#' @param show_report Logical; open the report in a browser after creation.
+#' @param save_report Logical; write report to disk (default `TRUE`).
+#' @return HTML string invisibly (when `save_report = TRUE`).
+#' @export
 generate_profiling_report <- function(output_dir = "profiling_reports", file_name = NULL, 
                                     show_report = FALSE, save_report = TRUE) {
-  if (!exists("profiling_data", envir = .GlobalEnv) || nrow(profiling_data) == 0) {
+  # Always use the global copy; avoid namespace shadowing
+  profiling_data <- get("profiling_data", envir = .GlobalEnv, inherits = FALSE)
+  if (!exists("profiling_data", envir = .GlobalEnv) ||
+      !is.data.frame(profiling_data) ||
+      nrow(profiling_data) == 0) {
     warning("No profiling data available to generate report")
     return(invisible(NULL))
   }
@@ -461,6 +523,15 @@ generate_profiling_report <- function(output_dir = "profiling_reports", file_nam
 }
 
 # Helper function to profile a code block
+#' Profile a block of code
+#'
+#' Convenience wrapper that automatically calls `.start_profiling_step()` and
+#' `.end_profiling_step()` around `expr`.
+#'
+#' @param step_name A short label for the profiled block.
+#' @param expr A block of R code enclosed in `{}`.
+#' @return Result of evaluating `expr`.
+#' @export
 profile_code <- function(step_name, expr) {
   .start_profiling_step(step_name)
   on.exit(.end_profiling_step(step_name))
