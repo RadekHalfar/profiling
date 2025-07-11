@@ -70,7 +70,7 @@ tryCatch({
   
   # End profiling normally if successful
   .end_profiling_step(step_name)
-  cat("  Operation completed successfully\n")
+  cat("  Operation completed successfully \n")
 }, error = function(e) {
   # In case of error, record the failure
   cat("  Error:", e$message, "\n")
